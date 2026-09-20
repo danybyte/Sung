@@ -27,6 +27,8 @@
 !/scripts/*.sh
 !/scripts/*.ps1
 !/scripts/*.cmd
+# Downloaded toolchains, Qt and runtimes for the Windows build.
+/.deps/
 /tests/*
 !/tests/*.cpp
 !/tests/*.h

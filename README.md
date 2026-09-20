@@ -70,33 +70,41 @@ Sung uses Google Sans Flex when installed and otherwise falls back to a system f
 
 ### Windows 10/11
 
-Install **Qt 6.8+** with either the Desktop MinGW or MSVC kit, **CMake 3.24+**, a matching C++ compiler, **Ninja** (recommended), **Python 3.10+**, **Node.js 20+**, and **FFmpeg**. If using the MSVC kit, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with **Desktop development with C++**, the MSVC compiler, the Windows 10/11 SDK, and **C++ CMake tools for Windows**. Clone the repository in PowerShell, then run:
-
-If CMake and Ninja are not installed, install them from an elevated PowerShell or Command Prompt with:
+The installer checks the tools Sung needs, tells you which are missing, and asks before downloading or installing anything. Open **PowerShell** in the Sung folder and run:
 
 ```powershell
-winget install --id Kitware.CMake -e
-winget install --id Ninja-build.Ninja -e
+.\scripts\install.ps1
 ```
 
-If `winget` is not available, download and install CMake from [cmake.org/download](https://cmake.org/download/), selecting the **Windows x64 Installer** and enabling **Add CMake to the system PATH for all users**. Download `ninja-win.zip` from the [Ninja releases page](https://github.com/ninja-build/ninja/releases), extract `ninja.exe` to a folder such as `C:\Tools\ninja`, and add that folder to your user `PATH` from **System Properties → Environment Variables**. Alternatively, install the **C++ CMake tools for Windows** and **Ninja** components through Visual Studio Installer.
+From **Command Prompt**, use:
 
-Close and reopen the terminal after installation so the updated `PATH` is loaded. Verify the tools before building:
-
-```powershell
-cmake --version
-ninja --version
+```bat
+scripts\install.cmd
 ```
 
-> **Do not double-click a `.ps1` file in File Explorer.** Windows may open it in Notepad instead of executing it. Open PowerShell in the Sung folder and run the commands below, or use the `.cmd` commands immediately afterward.
+It then builds the player and copies the Qt libraries next to `sung.exe`, so `sung.exe` runs on its own. Start it with:
 
 ```powershell
-.\scripts\setup.ps1
-.\scripts\build.ps1
 .\scripts\run.ps1
 ```
 
-The equivalent Command Prompt wrappers are `scripts\setup.cmd`, `scripts\build.cmd`, and `scripts\run.cmd`. The setup script creates the isolated helper environment in `runtime\Scripts\python.exe`; the Windows dependency list avoids optional native Brotli compilation, so Microsoft C++ Build Tools are not required just to install the helper runtime. No Unix shell, DBus service, `secret-tool`, or Linux filesystem layout is required. MPRIS and Linux desktop notifications are unavailable on Windows, while local files, YouTube, lyrics, playlists, artwork, Subsonic/Navidrome, Jellyfin, playback controls, and the rest of the player remain available through the Qt/Windows backend.
+> **Do not double-click a `.ps1` file in File Explorer.** Windows may open it in Notepad instead of executing it. Open PowerShell in the Sung folder and run the command above, or use `scripts\install.cmd`.
+
+**Prerequisites.** The installer reports each item and offers to install the missing ones with `winget`:
+
+| Tool | Why Sung needs it |
+| --- | --- |
+| **Python 3.9+** | Helper runtime for YouTube, lyrics and local metadata, and the Qt downloader |
+| **CMake 3.24+** | Configures and builds the project |
+| **Ninja** | Fast build generator (recommended) |
+| **Qt 6.8+** (MinGW kit) | The application framework; downloaded into `.deps` if missing |
+| **MinGW compiler** | C++20 compiler matching Qt; downloaded into `.deps` if missing |
+| **FFmpeg** | Reads metadata and artwork from local files |
+| **Node.js 20+** | Some YouTube resolver features |
+
+If `winget` is unavailable, install the missing tools manually: [Python](https://www.python.org/downloads/windows/) (enable **Add python.exe to PATH**), [CMake](https://cmake.org/download/), [Ninja](https://github.com/ninja-build/ninja/releases), [FFmpeg](https://www.gyan.dev/ffmpeg/builds/), and [Node.js](https://nodejs.org/). Set `SUNG_FFMPEG` to the folder containing `ffprobe.exe` if FFmpeg is not on `PATH`.
+
+Pass `-Yes` to accept every prompt, or `-SkipBuild` to install prerequisites only. The individual steps remain available as `scripts\setup.ps1`, `scripts\build.ps1`, and `scripts\run.ps1`, with `.cmd` wrappers for Command Prompt. Downloaded toolchains live in `.deps` and the helper environment in `runtime`; both are ignored by Git. No Unix shell, DBus service, `secret-tool`, or Linux filesystem layout is required. MPRIS and Linux desktop notifications are unavailable on Windows, while local files, YouTube, lyrics, playlists, artwork, Subsonic/Navidrome, Jellyfin, playback controls, and the rest of the player remain available through the Qt/Windows backend.
 
 ## Run and start Sung
 
