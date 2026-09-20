@@ -25,9 +25,11 @@
 #include <QStandardPaths>
 #include <QUrlQuery>
 #include <QUuid>
+#ifdef Q_OS_UNIX
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
+#endif
 
 static QString dataPath() {
   return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -227,8 +229,10 @@ void Backend::cancel(const QString &channel) {
   p->disconnect(this);
   for(auto timer:p->findChildren<QTimer*>()) timer->stop();
   connect(p,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),p,&QObject::deleteLater);
+#ifdef Q_OS_UNIX
   if(p->processId()>0) ::kill(-p->processId(),SIGKILL);
   if(p->state()==QProcess::Starting) connect(p,&QProcess::started,p,[p]{if(p->processId()>0)::kill(-p->processId(),SIGKILL);p->kill();});
+#endif
   p->kill();
   if(p->state()==QProcess::NotRunning)p->deleteLater();
 }
@@ -239,7 +243,9 @@ void Backend::request(const QString &channel, QVariantMap args, Callback done, s
   // when cancel() disconnects the backend callback while killing its process group.
   if(lifetime) connect(p,&QObject::destroyed,[lifetime]{});
   m_processes.insert(channel, p);
+#ifdef Q_OS_UNIX
   p->setChildProcessModifier([] { ::setsid(); });
+#endif
   QString helper = qEnvironmentVariable("SUNG_HELPER");
   if (helper.isEmpty())
     helper = QCoreApplication::applicationDirPath() + "/../helper/catalog.py";
@@ -247,12 +253,20 @@ void Backend::request(const QString &channel, QVariantMap args, Callback done, s
     helper = QCoreApplication::applicationDirPath() + "/../lib/sung/catalog.py";
   QString python = qEnvironmentVariable("SUNG_PYTHON");
   if (python.isEmpty()) {
-    auto bundled =
-        QCoreApplication::applicationDirPath() + "/../runtime/bin/python";
+#ifdef Q_OS_WIN
+    const QString runtimePython = "/runtime/Scripts/python.exe";
+#else
+    const QString runtimePython = "/runtime/bin/python";
+#endif
+    auto bundled = QCoreApplication::applicationDirPath() + "/.." + runtimePython;
     if (!QFile::exists(bundled))
-      bundled = QCoreApplication::applicationDirPath() +
-                "/../lib/sung/runtime/bin/python";
-    python = QFile::exists(bundled) ? bundled : QStringLiteral("python3");
+      bundled = QCoreApplication::applicationDirPath() + "/../lib/sung" + runtimePython;
+    python = QFile::exists(bundled) ? bundled :
+#ifdef Q_OS_WIN
+        QStringLiteral("python.exe");
+#else
+        QStringLiteral("python3");
+#endif
   }
   auto timer = new QTimer(p);
   timer->setSingleShot(true);
@@ -1989,7 +2003,9 @@ void Backend::updatePreparation(){
     // Preload failures and oversized/direct streams leave normal playback in charge.
     if(data.value("ok").toBool()&&file.isFile()&&file.size()<=32*1024*1024&&file.canonicalPath()==QFileInfo(directory->path()).canonicalFilePath()){
       m_preparedData=data;
+      #ifdef Q_OS_UNIX
       QFile buffered(file.filePath());if(buffered.open(QIODevice::ReadOnly))::posix_fadvise(buffered.handle(),0,0,POSIX_FADV_DONTNEED);
+#endif
     }
     else m_preparedDirectory.reset();
   },directory);

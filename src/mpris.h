@@ -1,5 +1,6 @@
 #pragma once
 #include "backend.h"
+#ifdef Q_OS_UNIX
 #include <QDBusAbstractAdaptor>
 #include <QDBusObjectPath>
 
@@ -99,3 +100,6 @@ private:
   Backend *b;
 };
 void registerMpris(Backend *);
+#else
+inline void registerMpris(Backend *) {}
+#endif

@@ -1,4 +1,5 @@
 #include "mpris.h"
+#ifdef Q_OS_UNIX
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -49,3 +50,4 @@ void registerMpris(Backend *b) {
     bus.registerObject("/org/mpris/MediaPlayer2", b,
                        QDBusConnection::ExportAdaptors);
 }
+#endif

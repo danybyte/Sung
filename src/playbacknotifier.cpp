@@ -1,4 +1,5 @@
 #include "playbacknotifier.h"
+#ifdef Q_OS_UNIX
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
@@ -42,3 +43,11 @@ void PlaybackNotifier::flush() {
     m_pending=false;call->deleteLater();flush();
   });
 }
+#else
+PlaybackNotifier::PlaybackNotifier(QObject *parent) : QObject(parent) {}
+void PlaybackNotifier::show(const QString &, const QString &) {}
+void PlaybackNotifier::clear() {}
+void PlaybackNotifier::notificationClosed(uint, uint) {}
+void PlaybackNotifier::flush() {}
+void PlaybackNotifier::close(uint) {}
+#endif

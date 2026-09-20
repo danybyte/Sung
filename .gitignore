@@ -22,8 +22,11 @@
 !/helper/catalog.py
 !/helper/online_artwork.py
 !/helper/requirements.txt
+!/helper/requirements-windows.txt
 /scripts/*
 !/scripts/*.sh
+!/scripts/*.ps1
+!/scripts/*.cmd
 /tests/*
 !/tests/*.cpp
 !/tests/*.h

@@ -8,10 +8,10 @@
 
 # Sung
 
-**YouTube Music, your music files, and your music server. Native on Linux.**
+**YouTube Music, your music files, and your music server. Native Qt desktop app for Linux and Windows.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Linux](https://img.shields.io/badge/platform-Linux-blue.svg)
+![Linux and Windows](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue.svg)
 ![Qt 6](https://img.shields.io/badge/built_with-Qt_6-41CD52.svg)
 
 A minimal Material 3 player built with C++ and Qt Quick, designed for CachyOS and Wayland.
@@ -67,6 +67,129 @@ Installation is per-user in `~/.local`; do not run the install script with `sudo
 Install the equivalent development packages for **Qt 6.8+** (Core, Gui, Quick, Qml, QuickControls2, Multimedia, Network, DBus, Svg and Wayland), a C++20 compiler, CMake 3.24+, Ninja, Python 3 with `venv`/`pip`, Node.js 20+ and FFmpeg. Install the Qt image-format plugins for WebP artwork. Then follow the clone and install commands above.
 
 Sung uses Google Sans Flex when installed and otherwise falls back to a system font. Noctalia is optional.
+
+### Windows 10/11
+
+Install **Qt 6.8+** with either the Desktop MinGW or MSVC kit, **CMake 3.24+**, a matching C++ compiler, **Ninja** (recommended), **Python 3.10+**, **Node.js 20+**, and **FFmpeg**. If using the MSVC kit, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with **Desktop development with C++**, the MSVC compiler, the Windows 10/11 SDK, and **C++ CMake tools for Windows**. Clone the repository in PowerShell, then run:
+
+If CMake and Ninja are not installed, install them from an elevated PowerShell or Command Prompt with:
+
+```powershell
+winget install --id Kitware.CMake -e
+winget install --id Ninja-build.Ninja -e
+```
+
+If `winget` is not available, download and install CMake from [cmake.org/download](https://cmake.org/download/), selecting the **Windows x64 Installer** and enabling **Add CMake to the system PATH for all users**. Download `ninja-win.zip` from the [Ninja releases page](https://github.com/ninja-build/ninja/releases), extract `ninja.exe` to a folder such as `C:\Tools\ninja`, and add that folder to your user `PATH` from **System Properties → Environment Variables**. Alternatively, install the **C++ CMake tools for Windows** and **Ninja** components through Visual Studio Installer.
+
+Close and reopen the terminal after installation so the updated `PATH` is loaded. Verify the tools before building:
+
+```powershell
+cmake --version
+ninja --version
+```
+
+> **Do not double-click a `.ps1` file in File Explorer.** Windows may open it in Notepad instead of executing it. Open PowerShell in the Sung folder and run the commands below, or use the `.cmd` commands immediately afterward.
+
+```powershell
+.\scripts\setup.ps1
+.\scripts\build.ps1
+.\scripts\run.ps1
+```
+
+The equivalent Command Prompt wrappers are `scripts\setup.cmd`, `scripts\build.cmd`, and `scripts\run.cmd`. The setup script creates the isolated helper environment in `runtime\Scripts\python.exe`; the Windows dependency list avoids optional native Brotli compilation, so Microsoft C++ Build Tools are not required just to install the helper runtime. No Unix shell, DBus service, `secret-tool`, or Linux filesystem layout is required. MPRIS and Linux desktop notifications are unavailable on Windows, while local files, YouTube, lyrics, playlists, artwork, Subsonic/Navidrome, Jellyfin, playback controls, and the rest of the player remain available through the Qt/Windows backend.
+
+## Run and start Sung
+
+### Start from the source checkout on Linux
+
+From the repository directory, run the setup step once, build the application, and start it:
+
+```bash
+cd Sung
+./scripts/setup.sh
+./scripts/build.sh
+./scripts/run.sh
+```
+
+After the first setup, only the build and run commands are normally needed:
+
+```bash
+./scripts/build.sh
+./scripts/run.sh
+```
+
+Keep the terminal open while running from the checkout. To start a second instance for testing, pass `--isolated`:
+
+```bash
+./scripts/run.sh --isolated
+```
+
+### Start from the source checkout on Windows
+
+Open **PowerShell** in the repository directory. Run setup once, then build and start Sung:
+
+```powershell
+cd C:\path\to\Sung
+.\scripts\setup.ps1
+.\scripts\build.ps1
+.\scripts\run.ps1
+```
+
+On later starts, use:
+
+```powershell
+.\scripts\build.ps1
+.\scripts\run.ps1
+```
+
+If PowerShell blocks local scripts, allow scripts for the current terminal only and retry:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+From **Command Prompt**, use the `.cmd` equivalents:
+
+```bat
+cd C:\path\to\Sung
+scripts\setup.cmd
+scripts\build.cmd
+scripts\run.cmd
+```
+
+When using Command Prompt, do not type PowerShell commands such as `Remove-Item`, and do not launch a `.ps1` file directly. To rebuild with Visual Studio from Command Prompt, use:
+
+```bat
+cd C:\Users\Emertat\Sung
+rmdir /s /q build
+scripts\build.cmd -Generator "Visual Studio 17 2022"
+scripts\run.cmd
+```
+
+The equivalent PowerShell commands are:
+
+```powershell
+cd C:\Users\Emertat\Sung
+Remove-Item -Recurse -Force .\build -ErrorAction SilentlyContinue
+.\scripts\build.ps1 -Generator "Visual Studio 17 2022"
+.\scripts\run.ps1
+```
+
+To launch a separate isolated test instance on Windows, run `.\scripts\run.ps1 --isolated` from PowerShell or `scripts\run.cmd --isolated` from Command Prompt.
+
+### Start an installed copy on Linux
+
+If you installed Sung with `./scripts/install.sh`, start it from a terminal with:
+
+```bash
+~/.local/bin/sung
+```
+
+You can also launch **Sung** from the desktop application menu. To stop it, close the window or press `Ctrl+Q` when the player has focus.
+
+### First start
+
+On the first launch, complete the onboarding screen, then search for a song or paste a YouTube Music link. To play local audio, open **Library → Local files → +** and choose files, or open **Folders → Add folder…** for a music directory. To connect Navidrome, Subsonic, or Jellyfin, open **Settings → Connections → Music server**.
 
 ## Getting started
 
@@ -209,6 +332,14 @@ If YouTube playback stops working after an upstream change, update the resolver:
 ~/.local/lib/sung/runtime/bin/python -m pip install --upgrade 'yt-dlp[default]' ytmusicapi
 ```
 
+On Windows, run the equivalent command from the repository directory:
+
+```powershell
+.\runtime\Scripts\python.exe -m pip install --upgrade "yt-dlp[default]" ytmusicapi
+```
+
+If `scripts\run.ps1` reports that Sung is not built, run `scripts\build.ps1` first. If the application starts but cannot play YouTube audio, confirm that the setup step completed successfully and that `FFmpeg` is installed and available on `PATH`. If local files do not appear, check that the selected folder is readable and use **Library → Local files → Rescan**.
+
 To update Sung, quit the player, then run `git pull` and `./scripts/install.sh` from this checkout. To uninstall, run `./scripts/uninstall.sh`; your library and settings are kept.
 
 ## Development
@@ -227,6 +358,8 @@ Run automated tests:
 ./scripts/test.sh
 ./scripts/verify.sh --offline
 ```
+
+On Windows, use `scripts\build.ps1` and run the CMake/CTest targets from the generated build directory. The Unix-only MPRIS and DBus notification tests are intentionally excluded from Windows configuration.
 
 The offline suite includes immersive-player checks at normal and high DPI, plus process-restart checks for saved layout preferences. To run just these checks against a build configured with `-DSUNG_DIAGNOSTICS=ON`:
 

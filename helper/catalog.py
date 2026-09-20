@@ -5,6 +5,83 @@ import re
 import sys
 from urllib.parse import urlparse, parse_qs
 
+# Windows consoles default to a legacy code page (cp1252). The protocol is
+# UTF-8 JSON in both directions, so force the standard streams to match.
+for _stream in (sys.stdin, sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8')
+    except (AttributeError, ValueError, OSError):
+        pass
+
+
+def _ensure_ffmpeg_on_path():
+    """ffprobe/ffmpeg are needed to read local metadata and posters. The Windows
+    installer does not always put them on PATH, so locate a known build and add
+    its bin directory before any subprocess lookup happens."""
+    import os
+    import shutil
+    if shutil.which('ffmpeg') and shutil.which('ffprobe'):
+        return
+    explicit = os.environ.get('SUNG_FFMPEG')
+    if explicit:
+        probe = os.path.join(explicit, 'ffprobe.exe' if os.name == 'nt' else 'ffprobe')
+        if os.path.isfile(probe):
+            os.environ['PATH'] = explicit + os.pathsep + os.environ.get('PATH', '')
+            return
+    cache_path = None
+    if os.name == 'nt':
+        cache_path = os.path.join(os.environ.get('LOCALAPPDATA') or os.environ.get('TEMP', ''), 'sung-ffmpeg-path')
+    if cache_path and os.path.isfile(cache_path):
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as handle:
+                cached = handle.read().strip()
+            probe = os.path.join(cached, 'ffprobe.exe')
+            if cached and os.path.isfile(probe):
+                os.environ['PATH'] = cached + os.pathsep + os.environ.get('PATH', '')
+                return
+        except OSError:
+            pass
+    candidates = []
+    found = None
+    if os.name == 'nt':
+        local = os.environ.get('LOCALAPPDATA', '')
+        program_files = [os.environ.get('ProgramFiles', ''), os.environ.get('ProgramFiles(x86)', '')]
+        roots = [
+            os.path.join(local, 'Microsoft', 'WinGet', 'Packages'),
+            os.path.join(local, 'Microsoft', 'WinGet', 'Links'),
+            os.path.join(local, 'Programs'),
+            'C:\\ffmpeg', 'C:\\tools\\ffmpeg',
+            os.path.join(os.environ.get('ProgramData', ''), 'chocolatey', 'bin'),
+        ]
+        roots += [os.path.join(p, 'ffmpeg') for p in program_files if p]
+        for root in roots:
+            if not root or not os.path.isdir(root):
+                continue
+            if os.path.isfile(os.path.join(root, 'ffprobe.exe')):
+                found = root
+                break
+            try:
+                for base, _dirs, files in os.walk(root):
+                    if 'ffprobe.exe' in files:
+                        found = base
+                        break
+            except OSError:
+                continue
+            if found:
+                break
+    if not found:
+        return
+    os.environ['PATH'] = found + os.pathsep + os.environ.get('PATH', '')
+    if cache_path:
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as handle:
+                handle.write(found)
+        except OSError:
+            pass
+
+
+_ensure_ffmpeg_on_path()
+
 
 def artwork(item):
     thumbs = item.get('thumbnails') or []
