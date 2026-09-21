@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QNetworkAccessManager>
@@ -125,6 +126,7 @@ int main(int argc, char **argv) {
   QGuiApplication app(argc, argv);
   app.setApplicationName("sung");
   app.setApplicationDisplayName("Sung");
+  app.setWindowIcon(QIcon(QStringLiteral(":/assets/sung.png")));
   app.setOrganizationName("Sung");
   app.setApplicationVersion("0.12.0");
   app.setDesktopFileName("sung");

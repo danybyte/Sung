@@ -40,6 +40,7 @@ qt_add_qml_module(sung URI SungUi VERSION 1.0 NO_PLUGIN NO_RESOURCE_TARGET_PATH 
 file(GLOB icons CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" assets/icons/*.svg)
 qt_add_resources(sung assets PREFIX "/" FILES ${icons}
  OPTIONS --compress 19 --threshold 0)
+qt_add_resources(sung app_icon PREFIX "/" FILES assets/sung.png)
 if(UNIX AND CMAKE_BUILD_TYPE STREQUAL "Release")
  add_custom_command(TARGET sung POST_BUILD COMMAND ${CMAKE_STRIP} --strip-unneeded $<TARGET_FILE:sung>)
 endif()
