@@ -25,6 +25,8 @@
 #include <QStandardPaths>
 #include <QSvgRenderer>
 #include <QTimer>
+#include <QLibrary>
+#include <QLoggingCategory>
 #ifdef Q_OS_UNIX
 #include <unistd.h>
 #endif
@@ -91,6 +93,27 @@ static QString instanceSocketName() {
   return QStringLiteral("sung-instance");
 #endif
 }
+// Windows builds use the console subsystem so command-line flags and test
+// output reach the terminal. That also lets Qt Multimedia and FFmpeg stream
+// every media detail into the console, so silence them unless --verbose is set.
+static void configureMediaLogging(bool verbose) {
+#ifdef Q_OS_WIN
+  if (verbose) return;
+  QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.*=false"));
+  const QDir libDir(QCoreApplication::applicationDirPath());
+  const auto candidates = libDir.entryList({QStringLiteral("avutil-*.dll")}, QDir::Files);
+  using SetLevel = void (*)(int);
+  for (const auto &name : candidates) {
+    QLibrary util(libDir.filePath(name));
+    if (!util.load()) continue;
+    if (auto setLevel = reinterpret_cast<SetLevel>(util.resolve("av_log_set_level")))
+      setLevel(16 /* AV_LOG_ERROR */);
+    break;
+  }
+#else
+  Q_UNUSED(verbose);
+#endif
+}
 int main(int argc, char **argv) {
 #ifdef SUNG_DIAGNOSTICS
   QElapsedTimer startupTimer;startupTimer.start();
@@ -109,6 +132,7 @@ int main(int argc, char **argv) {
   if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("sung-immersive-test");
 #endif
   const auto args = app.arguments();
+  configureMediaLogging(args.contains("--verbose"));
   if (args.contains("--version")) {
     fprintf(stdout, "Sung 0.12.0\n");
     return 0;

@@ -106,6 +106,12 @@ If `winget` is unavailable, install the missing tools manually: [Python](https:/
 
 Pass `-Yes` to accept every prompt, or `-SkipBuild` to install prerequisites only. The individual steps remain available as `scripts\setup.ps1`, `scripts\build.ps1`, and `scripts\run.ps1`, with `.cmd` wrappers for Command Prompt. Downloaded toolchains live in `.deps` and the helper environment in `runtime`; both are ignored by Git. No Unix shell, DBus service, `secret-tool`, or Linux filesystem layout is required. MPRIS and Linux desktop notifications are unavailable on Windows, while local files, YouTube, lyrics, playlists, artwork, Subsonic/Navidrome, Jellyfin, playback controls, and the rest of the player remain available through the Qt/Windows backend.
 
+The Windows build is a console application so command-line flags and test output reach the terminal. Qt Multimedia and FFmpeg messages are silenced by default; pass `--verbose` when you need them for troubleshooting:
+
+```powershell
+.\build\sung.exe --verbose
+```
+
 ## Run and start Sung
 
 ### Start from the source checkout on Linux
