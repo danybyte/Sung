@@ -123,7 +123,24 @@ def normalize(item, kind='', parent=None):
 
 
 def clean(items, kind='', parent=None):
-    return [t for i in items if isinstance(i, dict) and (t := normalize(i, kind, parent))['id']]
+    cleaned = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        track = normalize(item, kind, parent)
+        if track['id']:
+            cleaned.append(track)
+            continue
+        # YouTube's trackCount includes deleted/private/unavailable entries,
+        # which have no videoId and were previously discarded here. Keep a
+        # non-playable placeholder so Sung's visible count matches the source
+        # playlist instead of silently turning 820 into 818.
+        if kind == 'song':
+            track['id'] = f'unavailable_{index}'
+            track['title'] = track['title'] if track['title'] != 'Untitled' else 'Unavailable track'
+            track['available'] = False
+            cleaned.append(track)
+    return cleaned
 
 
 def normalize_lyrics(data):
@@ -487,7 +504,13 @@ def run(req):
         data.update(type='album', browseId=req['id'])
         return {'title': data.get('title', ''), 'artist': ', '.join(a.get('name','') for a in data.get('artists',[]) if isinstance(a,dict)), 'year': data.get('year',''), 'art': artwork(data), 'items': clean(data.get('tracks', []), 'song', data)}
     if op == 'playlist':
-        data = api.get_playlist(req['id'], limit=min(int(req.get('limit', 100)), 5000))
+        # ytmusicapi interprets ``limit`` as the minimum number of continuation
+        # items to fetch, in addition to the first page.  Keep Sung's request
+        # bounded while compensating for that first page so the returned list
+        # is close to the requested total.
+        requested = min(max(int(req.get('limit', 100)), 0), 5000)
+        continuation_limit = max(0, requested - 100)
+        data = api.get_playlist(req['id'], limit=continuation_limit)
         return {'title': data.get('title', ''), 'art': artwork(data), 'items': clean(data.get('tracks', []), 'song', data), 'total': data.get('trackCount', 0)}
     if op == 'artist':
         data = api.get_artist(req['id'])
@@ -536,7 +559,7 @@ def run(req):
             return {'title':t['title'],'items':[t]}
         playlist = (query.get('list') or [''])[0]
         if playlist:
-            return run({'op':'playlist','id':playlist,'limit':100})
+            return run({'op':'playlist','id':playlist,'limit':5000})
         raise ValueError('This link has no song or playlist')
     raise ValueError('Unknown request')
 

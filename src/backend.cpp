@@ -517,7 +517,8 @@ void Backend::open(const QVariantMap &item) {
   if (id.isEmpty())
     return;
   browseRequest(
-      {{"op", op}, {"id", id}, {"title", item.value("title")}, {"limit", 100}});
+      {{"op", op}, {"id", id}, {"title", item.value("title")},
+       {"limit", op == "playlist" ? 5000 : 100}});
 }
 void Backend::openLink(const QString &url) {
   browseRequest(
