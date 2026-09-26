@@ -2,6 +2,7 @@
 #include "rowselection.h"
 #include "desktoptheme.h"
 #include "mpris.h"
+#include "windowsmedia.h"
 #include "roundedart.h"
 #include "windowresources.h"
 #include <QDir>
@@ -192,6 +193,7 @@ int main(int argc, char **argv) {
   if (engine.rootObjects().isEmpty())
     return 1;
   auto window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+  if (window) registerWindowsMediaControls(&backend, window);
   QObject::connect(&backend, &Backend::raiseRequested, window, [window] {
     QMetaObject::invokeMethod(window,"restorePlayer");
     window->raise();

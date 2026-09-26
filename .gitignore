@@ -16,6 +16,8 @@
 /src/*
 !/src/*.cpp
 !/src/*.h
+!/src/cppwinrt/
+!/src/cppwinrt/**
 /qml/*
 !/qml/*.qml
 /helper/*
