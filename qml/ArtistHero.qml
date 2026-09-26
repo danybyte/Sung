@@ -121,6 +121,20 @@ Item {
             onClicked: app.togglePin(app.collectionItem)
         }
         MButton {
+            objectName: "artistHeroLike"
+            symbol: "heart"
+            toggle: true
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: 4
+            // Reading the liked list alongside the collection item keeps the
+            // heart current, the same way the app bar row keeps its own like
+            // current when a collection is liked from elsewhere.
+            selected: (app.likedCollections, app.isLikedItem(app.collectionItem))
+            tip: selected?"Remove from liked":"Like"
+            visible: !!app.collectionItem.id
+            onClicked: app.toggleLike(app.collectionItem)
+        }
+        MButton {
             objectName: "artistHeroRefresh"
             symbol: "refresh"
             Layout.alignment: Qt.AlignTop
