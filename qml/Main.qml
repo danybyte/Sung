@@ -220,11 +220,21 @@ ApplicationWindow {
     }
     // A panel width of nought means nobody has dragged it, so it follows the
     // canonical supporting pane proportion instead.
-    Settings { id: geometry; category: "Window"; property int width: 1180; property int height: 800; property real panelWidth: 0 }
+    Settings { id: geometry; category: "Window"; property int width: 1180; property int height: 800; property bool maximized: true; property real panelWidth: 0 }
     Settings { id: railSettings; category: "Navigation"; property bool expanded: false }
-    Component.onCompleted: { windowResources.manage(window);width=geometry.width;height=geometry.height;geometryReady=true;app.setUiActive(uiActive);if(!app.onboarded)Qt.callLater(()=>{if(!app.onboarded)onboarding.open();}); }
+    Component.onCompleted: {
+        windowResources.manage(window);
+        width=geometry.width;height=geometry.height;geometryReady=true;
+        if(geometry.maximized)Qt.callLater(()=>window.showMaximized());
+        app.setUiActive(uiActive);
+        if(!app.onboarded)Qt.callLater(()=>{if(!app.onboarded)onboarding.open();});
+    }
     onWidthChanged: {if(albumFlying)cancelAlbumFlight();if(geometryReady && !immersive && visibility===Window.Windowed)geometry.width=width;}
     onHeightChanged: {if(albumFlying)cancelAlbumFlight();if(geometryReady && !immersive && visibility===Window.Windowed)geometry.height=height;}
+    onVisibilityChanged: {
+        if(geometryReady && !immersive && visibility!==Window.Minimized)
+            geometry.maximized=visibility===Window.Maximized;
+    }
     property bool albumFlying: false
     property bool albumOpening: false
     property bool albumReturning:false
