@@ -194,6 +194,7 @@ ItemDelegate {
         }
         PlayingIndicator { ink: row.titleInk; visible: row.active }
         SungText { font.features: {"tnum": 1}; visible: !row.queueMode || row.width>350; text: row.track.duration || (row.track.seconds ? app.formatTime(row.track.seconds*1000) : ""); font.pixelSize: Theme.bodySmall; color: row.supportInk; Layout.rightMargin: 2 }
+        MButton { symbol: "heart"; tip: row.track.kind && row.track.kind!=="song" ? (app.isLikedItem(row.track)?"Remove from liked":"Like") : ""; toggle: true; selected: row.track.kind && row.track.kind!=="song" && (app.likedCollections, app.isLikedItem(row.track)); visible: ["album","artist","playlist","local","local-album","local-artist"].indexOf(String(row.track.kind))>=0; ink: row.actionInk; onClicked: app.toggleLike(row.track) }
         MButton { visible: row.track.kind!=="smart"; symbol: "more"; tip: "Track actions"; Accessible.name: "Actions for "+(row.track.title||"track"); ink: row.actionInk; onClicked: row.menuRequested(row.track,row.rowIndex,this) }
     }
 }

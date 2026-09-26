@@ -8,6 +8,7 @@ AbstractButton {
     property string artUrl: ""
     property bool selected: false
     property bool expanded: false
+    signal contextRequested(var anchor)
     // Pending work in this destination. A count draws Material's large badge,
     // `badged` alone draws the dot.
     property bool badged: false
@@ -65,12 +66,13 @@ AbstractButton {
             anchors.fill: parent
             visible: opacity>0; opacity: control.expanded ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
-            Icon { id: stackGlyph; anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.secondaryContainerText : Theme.muted; Accessible.ignored: true }
+            Icon { id: stackGlyph; anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; visible: !control.artUrl; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.secondaryContainerText : Theme.muted; Accessible.ignored: true }
+            Artwork { id: stackArtwork; anchors.horizontalCenter: parent.horizontalCenter; y: 4; width: 32; height: 32; visible: !!control.artUrl; radius: Theme.shapeSmall; pixels: 96; url: control.artUrl; Accessible.ignored: true }
             MBadge {
                 objectName: "navigationBadge"
                 present: control.badged || control.badgeCount >= 0
                 count: control.badgeCount; subject: control.text
-                x: stackGlyph.x+stackGlyph.width-inset; y: stackGlyph.y-height+lift
+                x: (control.artUrl ? stackArtwork.x+stackArtwork.width : stackGlyph.x+stackGlyph.width)-inset; y: (control.artUrl ? stackArtwork.y+stackArtwork.height : stackGlyph.y+stackGlyph.height)-height+lift
             }
             SungText {
                 objectName: "navigationLabel"
@@ -119,4 +121,5 @@ AbstractButton {
             }
         }
     }
+    MouseArea { anchors.fill: parent; acceptedButtons: Qt.RightButton; onClicked: control.contextRequested(control) }
 }

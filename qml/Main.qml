@@ -25,6 +25,27 @@ ApplicationWindow {
     property string libraryTab: "favorites"
     property string localPlaylist: ""
     property string side: ""
+    function likedEmptyTitle() {
+        if(window.libraryTab==="favorites-songs")return "No liked songs yet";
+        if(window.libraryTab==="favorites-artists")return "No liked artist yet";
+        if(window.libraryTab==="favorites-albums")return "No liked album yet";
+        if(window.libraryTab==="favorites-playlists")return "No liked playlist yet";
+        return "Nothing liked yet";
+    }
+    function likedHeaderTitle() {
+        if(window.libraryTab==="favorites-songs")return "Liked Songs";
+        if(window.libraryTab==="favorites-artists")return "Liked Artists";
+        if(window.libraryTab==="favorites-albums")return "Liked Albums";
+        if(window.libraryTab==="favorites-playlists")return "Liked Playlists";
+        return "Liked";
+    }
+    function likedSearchLabel() {
+        if(window.libraryTab==="favorites-songs")return "Search song";
+        if(window.libraryTab==="favorites-artists")return "Search artist";
+        if(window.libraryTab==="favorites-albums")return "Search album";
+        if(window.libraryTab==="favorites-playlists")return "Search playlist";
+        return "Search";
+    }
     // The queue panel shows what is coming, or what has just gone.
     property string queueTab: "next"
     property bool collectionTools: false
@@ -71,12 +92,24 @@ ApplicationWindow {
         }
         return "";
     }
-    property bool hasSongCollection: !window.feedShowing && app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong)
+    // Filtering and sorting apply to a collection of anything, not only songs;
+    // gating it on the first row's kind made the whole toolbar row appear and
+    // disappear between Liked tabs and shove the header up and down.
+    property bool hasSongCollection: !window.feedShowing && app.results.count>0 && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist)
     property var bulkView: null
     property var batchItems: []
     property var menuItem: ({})
     property int menuIndex: -1
     property bool menuQueue: false
+    property var navigationContextItem: ({})
+    function showNavigationContext(item, anchor) {
+        navigationContextItem=item;
+        navigationItemActions.popup(anchor, anchor.width, 0);
+    }
+    function playNavigationItem(item) {
+        if(item.kind==="playlist" && String(item.browseId || "").startsWith("http")) app.playLink(item.browseId);
+        else app.playCover(item);
+    }
     property string playlistAction: "create"
     property string editPlaylistId: ""
     property string toastText: ""
@@ -354,7 +387,7 @@ ApplicationWindow {
     // travel through them.
     NavigationTransition { id: destinationTransition; objectName: "destinationTransition"; target: contentColumn }
     NavigationTransition { id: tabTransition; objectName: "tabTransition"; target: contentBody }
-    readonly property var libraryOrder: ["favorites","playlists","files","local-albums","local-artists","mixes","history","server"]
+    readonly property var libraryOrder: ["favorites","favorites-songs","favorites-artists","favorites-albums","favorites-playlists","playlists","files","local-albums","local-artists","mixes","history","server"]
     // Material's compact window class. Below it a rail would be taking room the
     // content needs, so navigation moves to a bar along the bottom.
     readonly property bool compactWindow: !atLeastMedium
@@ -376,7 +409,7 @@ ApplicationWindow {
     function activateSide(which) { side=side===which?"":which;if(side==="lyrics")app.fetchLyrics(); }
 
     function quickCommands() {
-        let rows=[{id:"view-layout",title:"Current view layout"},{id:"home-layout",title:"Customize Home"},{id:"sessions",title:"Listening sessions"},{id:"stats",title:"Listening statistics"},{id:"search",title:"Search music"},{id:"queue",title:"Show queue"},{id:"lyrics",title:"Show lyrics"},{id:"playing",title:"Show playing song"},{id:"mini",title:"Open mini player"},{id:"settings",title:"Open settings"},{id:"folders",title:"Manage music folders"},{id:"rescan",title:"Rescan music folders"},{id:"files",title:"Browse local music"},{id:"favorites",title:"Browse liked songs"}];
+        let rows=[{id:"view-layout",title:"Current view layout"},{id:"home-layout",title:"Customize Home"},{id:"sessions",title:"Listening sessions"},{id:"stats",title:"Listening statistics"},{id:"search",title:"Search music"},{id:"queue",title:"Show queue"},{id:"lyrics",title:"Show lyrics"},{id:"playing",title:"Show playing song"},{id:"mini",title:"Open mini player"},{id:"settings",title:"Open settings"},{id:"folders",title:"Manage music folders"},{id:"rescan",title:"Rescan music folders"},{id:"files",title:"Browse local music"},{id:"favorites",title:"Browse liked"}];
         if(app.currentIndex>=0)rows.push({id:"artwork",title:"Change animated cover"},{id:"play",title:app.playing?"Pause playback":"Resume playback"},{id:"immersive",title:"Toggle immersive player"});
         for(const p of app.playlists)rows.push({id:"playlist:"+p.id,title:"Open playlist · "+p.title,value:p.id});
         for(const device of app.audioDevices)rows.push({id:"device:"+device.id,title:"Audio output · "+device.name,value:device.id});
@@ -521,7 +554,7 @@ ApplicationWindow {
             // one. This asked for 1080, which is not a breakpoint either.
             readonly property bool roomToExpand: window.atLeastExpanded
             readonly property bool expanded: railSettings.expanded && roomToExpand
-            readonly property var pinned: expanded ? app.pins.slice(0,6) : []
+            readonly property var pinned: app.pins.slice(0,6)
             // Material's expanded rail runs from 220dp to 360dp; it takes more
             // of that range as the window has room to give.
             property real shownWidth: expanded ? Math.max(220, Math.min(360, window.width*0.2)) : 96
@@ -576,21 +609,57 @@ ApplicationWindow {
                     }
                 }
             }
-            // Secondary destinations the collapsed rail has no room to show.
+            // Pinned collections remain visible after the primary destinations,
+            // including their artwork when the rail is collapsed.
             MDivider { objectName: "navigationDivider"; visible: navigationRail.pinned.length>0; Layout.preferredWidth: navigationRail.shownWidth-32; Layout.alignment: Qt.AlignLeft; Layout.leftMargin: 16; Layout.topMargin: 4 }
-            SungText { objectName: "navigationPinnedLabel"; visible: navigationRail.pinned.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: 20; Layout.alignment: Qt.AlignLeft }
+            SungText { objectName: "navigationPinnedLabel"; visible: navigationRail.expanded && navigationRail.pinned.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: 20; Layout.alignment: Qt.AlignLeft }
             Repeater {
                 model: navigationRail.pinned
                 MNavigationItem {
                     required property var modelData
                     required property int index
                     objectName: "navPin_"+index
-                    expanded: true
-                    Layout.alignment: Qt.AlignLeft
-                    Layout.preferredWidth: navigationRail.shownWidth-24; Layout.preferredHeight: 48
+                    expanded: navigationRail.expanded
+                    Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter
+                    Layout.preferredWidth: navigationRail.expanded ? navigationRail.shownWidth-24 : 80; Layout.preferredHeight: navigationRail.expanded ? 48 : 64
                     artUrl: modelData.art || ""; text: modelData.title || ""
                     selected: app.libraryId===modelData.id || app.collectionItem.id===modelData.id
                     onClicked: app.open(modelData)
+                    onContextRequested: window.showNavigationContext(modelData, anchor)
+                }
+            }
+            ColumnLayout {
+                id: likedRailSection
+                objectName: "likedRailSection"
+                visible: app.likedSidebarCollections.length>0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(280, likedRailList.contentHeight+40)
+                Layout.maximumHeight: Math.max(112, navigationRail.height-320)
+                spacing: 2
+                MDivider { objectName: "likedRailDivider"; visible: likedRailSection.visible; Layout.fillWidth: true; Layout.topMargin: 4; Layout.bottomMargin: 2 }
+                SungText { objectName: "likedRailLabel"; text: "Liked"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: navigationRail.expanded ? 20 : 16; visible: navigationRail.expanded }
+                ListView {
+                    id: likedRailList
+                    objectName: "likedRailList"
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    clip: true; spacing: 0; boundsBehavior: Flickable.StopAtBounds
+                    model: app.likedSidebarCollections.slice(0, 6)
+                    ScrollBar.vertical: MScrollBar {}
+                    delegate: MNavigationItem {
+                        required property var modelData
+                        required property int index
+                        objectName: "navLiked_"+index
+                        expanded: navigationRail.expanded
+                        Layout.fillWidth: true
+                        width: likedRailList.width
+                        height: navigationRail.expanded ? 48 : 64
+                        symbol: modelData.kind==="artist" || modelData.kind==="local-artist" ? "person" : modelData.kind==="album" || modelData.kind==="local-album" ? "disc" : modelData.kind==="playlist" || modelData.kind==="local" ? "queue" : "heart"
+                        artUrl: modelData.art || ""
+                        text: modelData.title || "Liked item"
+                        selected: app.isLikedItem(modelData) && app.collectionItem.id===modelData.id
+                        onClicked: app.open(modelData)
+                        onContextRequested: window.showNavigationContext(modelData, anchor)
+                    }
                 }
             }
             Item { Layout.fillHeight: true }
@@ -814,10 +883,15 @@ ApplicationWindow {
                     id: content
                     Accessible.role: Accessible.Pane
                     Accessible.name: window.title || "Content"
-                    readonly property real headerCollapse: tracks.visible ? Math.max(0,Math.min(1,(tracks.contentY-tracks.originY)/160)) : 0
+                    // The header collapses under whatever is scrolling, so a
+                    // list and the grid that replaced it keep it at the same
+                    // height instead of the whole bar growing back and shoving
+                    // the actions and the tabs down between tabs.
+                    readonly property Flickable scrollView: tracks.visible ? tracks : localGroups.visible ? localGroups : shelves.visible ? shelves : playlistGrid.visible ? playlistGrid : localPlaylists.visible ? localPlaylists : null
+                    readonly property real headerCollapse: scrollView ? Math.max(0,Math.min(1,(scrollView.contentY-scrollView.originY)/160)) : 0
                     readonly property bool compactHeader: headerCollapse>0.7
                     property real headerExtent: (app.albumInfo.summary?Math.min(156,window.height*0.19):76)*(1-headerCollapse)+40*headerCollapse
-                    Behavior on headerExtent {enabled:!tracks.moving;NumberAnimation {duration:app.motion?120:0;easing.type:Easing.OutCubic}}
+                    Behavior on headerExtent {enabled:!(content.scrollView && content.scrollView.moving);NumberAnimation {duration:app.motion?120:0;easing.type:Easing.OutCubic}}
                     visible: true
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: Theme.shapeExtraLarge; color: window.washed(Theme.surfaceLow); clip: true
@@ -873,7 +947,7 @@ ApplicationWindow {
                         // transform keeps that off the layout's own geometry.
                         property real shift: 0
                         transform: Translate { x: contentColumn.shift }
-                        anchors.fill: parent; anchors.margins: localGroups.visible?Math.max(12,window.paneMargin-8):window.paneMargin; spacing: app.page==="server"?8:localGroups.visible?12:18
+                        anchors.fill: parent; anchors.margins: window.paneMargin; spacing: app.page==="server"?8:18
                         ArtistHero {
                             objectName: "artistHero"
                             Layout.fillWidth: true
@@ -883,16 +957,26 @@ ApplicationWindow {
                         RowLayout {
                             visible: !window.artistPage
                             Layout.fillWidth: true; spacing: 16
-                            Artwork { id:collectionArtwork;objectName:"collectionArtwork";opacity:window.albumFlying?0:1;visible: !!app.cover; url: app.cover; Layout.preferredWidth: content.headerExtent; Layout.preferredHeight: content.headerExtent; radius: (app.page==="artist" || app.page==="local-artist") ? width/2 : app.albumInfo.summary?24:12; shape: (app.page==="artist" || app.page==="local-artist") ? "cookie9Sided" : ""; pixels: app.albumInfo.summary?384:180
+                            Artwork { id:collectionArtwork;objectName:"collectionArtwork";opacity:window.albumFlying?0:1;visible: !!app.cover && app.page!=="library"; url: app.cover; Layout.preferredWidth: content.headerExtent; Layout.preferredHeight: content.headerExtent; radius: (app.page==="artist" || app.page==="local-artist") ? width/2 : app.albumInfo.summary?24:12; shape: (app.page==="artist" || app.page==="local-artist") ? "cookie9Sided" : ""; pixels: app.albumInfo.summary?384:180
                                 AbstractButton {anchors.fill:parent;objectName:"inspectCollectionArtwork";Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:artworkViewer.inspect(app.cover)
                                     background:Rectangle {color:"transparent";radius:Theme.shapeExtraLarge;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                                 }
                             }
                             ColumnLayout {
+                                id: titleColumn
                                 Layout.fillWidth: true; spacing: 6
-                            SungText {heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
-                                SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: Theme.bodyLarge; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
-                                SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
+                                // The Liked views all carry a short label ("Liked
+                                // Songs", "Liked Albums"). A label that fits on
+                                // one line must not wrap on a narrower window and
+                                // grow the header, because the tabs and the
+                                // centred empty state are laid out in the room the
+                                // header leaves; one line keeps that room constant
+                                // while the label changes between tabs. Long album
+                                // titles still wrap everywhere else.
+                                readonly property bool oneLine: window.destination==="library" && (window.libraryTab==="favorites" || window.libraryTab.startsWith("favorites-"))
+                                SungText { id: titleText; heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&(window.libraryTab==="playlists"&&!window.localPlaylist) ? "Playlists" : window.destination==="library"&&(window.libraryTab==="favorites"||window.libraryTab.startsWith("favorites-")) ? window.likedHeaderTitle() : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: titleColumn.oneLine ? Text.NoWrap : Text.Wrap; maximumLineCount: titleColumn.oneLine ? 1 : 2; elide: titleColumn.oneLine ? Text.ElideRight : Text.ElideNone }
+                                SungText { objectName: "albumArtist"; visible: app.page!=="library" && !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: Theme.bodyLarge; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
+                                SungText { objectName: "albumSummary"; visible: app.page!=="library" && !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
                             }
                             // The app bar's own actions. Material measures them
                             // against the room the title leaves and folds the
@@ -912,6 +996,9 @@ ApplicationWindow {
                                     {key:"pin", name:"pinCollectionButton", symbol:"pin", toggle:true, checked:(app.pins, app.isPinned(app.collectionItem)),
                                      label:app.isPinned(app.collectionItem)?"Unpin from Home":"Pin to Home",
                                      visible:!!app.collectionItem.id, trigger:function(){app.togglePin(app.collectionItem)}},
+                                    {key:"like", name:"likeCollectionButton", symbol:"heart", toggle:true, checked:(app.likedCollections, app.isLikedItem(app.collectionItem)),
+                                     label:app.isLikedItem(app.collectionItem)?"Remove from liked":"Like",
+                                     visible:!!app.collectionItem.id, trigger:function(){app.toggleLike(app.collectionItem)}},
                                     {key:"refresh", symbol:"refresh", label:"Refresh", enabled:!app.busy,
                                      visible:app.page!=="library"&&app.page!=="local", trigger:function(){app.refresh()}},
                                     {key:"folders", name:"musicFoldersButton", symbol:"folder", text:"Folders", label:"Manage music folders",
@@ -956,6 +1043,18 @@ ApplicationWindow {
                             dotKey: app.importingLocal ? "files" : ""
                             onChosen: key => window.chooseLibrary(key)
                         }
+                        LibraryTabs {
+                            objectName: "likedFacetTabs"
+                            visible: window.destination==="library" && (window.libraryTab==="favorites" || window.libraryTab.startsWith("favorites-")); Layout.fillWidth: true
+                            secondary: true
+                            entries: [{label:"All", key:"favorites", name:"likedView_all"},
+                                      {label:"Songs", key:"favorites-songs", name:"likedView_songs"},
+                                      {label:"Artists", key:"favorites-artists", name:"likedView_artists"},
+                                      {label:"Albums", key:"favorites-albums", name:"likedView_albums"},
+                                      {label:"Playlists", key:"favorites-playlists", name:"likedView_playlists"}]
+                            currentKey: window.libraryTab
+                            onChosen: key => window.chooseLibrary(key)
+                        }
                         RowLayout {
                             visible: window.destination==="library" && ["files","local-albums","local-artists"].indexOf(window.libraryTab)>=0
                             Layout.fillWidth: true; spacing: 8
@@ -987,20 +1086,25 @@ ApplicationWindow {
                             }
                         }
                         RowLayout {
+                            id: collectionActionsRow
                             // An artist's hero owns these actions while it is
                             // open; the row takes them back as it collapses, so
                             // exactly one Play is ever on screen.
-                            visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
+                            visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && (!window.artistPage || content.compactHeader)
                             Layout.fillWidth: true; spacing: 10
+                            // A collection of artists or albums holds no songs
+                            // to play, so the action says so instead of the
+                            // whole row vanishing and the tabs jumping with it.
+                            readonly property bool playable: app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong)
                             MSplitButton {
                                 objectName: "collectionPlay"
                                 text: "Play"; symbol: "play"; filled: true
-                                enabled: app.collection.count>0
+                                enabled: collectionActionsRow.playable && app.collection.count>0
                                 onClicked: app.playCollection(0)
                                 menu: MMenu {
-                                    MMenuItem { objectName: "collectionShuffle"; symbol: "shuffle"; text: "Shuffle"; enabled: app.collection.count>1; onTriggered: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));} }
-                                    MMenuItem { objectName: "collectionQueue"; symbol: "queue"; text: "Add to queue"; enabled: app.collection.count>0; onTriggered: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)window.confirmQueued();} }
-                                    MMenuItem { objectName: "collectionPlayNext"; symbol: "next"; text: "Play next"; enabled: app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
+                                    MMenuItem { objectName: "collectionShuffle"; symbol: "shuffle"; text: "Shuffle"; enabled: collectionActionsRow.playable && app.collection.count>1; onTriggered: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));} }
+                                    MMenuItem { objectName: "collectionQueue"; symbol: "queue"; text: "Add to queue"; enabled: collectionActionsRow.playable && app.collection.count>0; onTriggered: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)window.confirmQueued();} }
+                                    MMenuItem { objectName: "collectionPlayNext"; symbol: "next"; text: "Play next"; enabled: collectionActionsRow.playable && app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
                                 }
                             }
                             // Material's input chip: a filter the reader typed
@@ -1161,7 +1265,7 @@ ApplicationWindow {
                             GridView {
                                 id: localGroups; objectName: "localGroups"; anchors.fill: parent; clip: true; reuseItems: true; cacheBuffer: 0
                                 bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
-                                visible: app.page==="library" && app.viewMode==="grid" && (app.libraryId==="local-albums" || app.libraryId==="local-artists")
+                                visible: app.page==="library" && app.viewMode==="grid" && (app.libraryId==="local-albums" || app.libraryId==="local-artists" || app.libraryId==="favorites-artists" || app.libraryId==="favorites-albums")
                                 model: visible ? app.collection : null
                                 cellWidth: width/Math.max(2,Math.floor(width/Theme.gridCell));
                                 Behavior on cellWidth {enabled:app.motion && localGroups.visible;NumberAnimation {duration:260;easing.type:Easing.InOutCubic}}
@@ -1169,7 +1273,13 @@ ApplicationWindow {
                                 readonly property real coverExtent:Math.min(cellWidth-16,Math.max(96,height-64))
                                 ScrollBar.vertical: ScrollBar {}
                                 delegate: ArtCard {required property var entry; width: localGroups.coverExtent; track: entry;openHandler:window.openCollection}
-                                SungText {anchors.centerIn: parent; visible: localGroups.count===0; text:app.collection.query?"No matches":"Import music to browse here"; color:Theme.muted}
+                                Column {
+                                    anchors.centerIn: parent; width: Math.min(parent.width,320); height: 140; spacing: 14
+                                    visible: localGroups.count===0 && !app.libraryId.startsWith("favorites")
+                                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: app.collection.query ? "search" : "library"; size: 36; ink: Theme.muted }
+                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: app.collection.query ? "No matches" : app.libraryId.startsWith("favorites") ? window.likedEmptyTitle() : "Import music to browse here"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
+                                    MButton { anchors.horizontalCenter: parent.horizontalCenter; tonal: true; visible: !app.collection.query && app.libraryId.startsWith("favorites"); text: window.likedSearchLabel(); onClicked: window.focusSearch() }
+                                }
                             }
                             TrackList {
                                 id: tracks; groupDiscs: !!app.albumInfo.multipleDiscs && app.collection.sortKey==="original"; objectName: "tracksView"; anchors.fill: parent; clip: true
@@ -1189,16 +1299,27 @@ ApplicationWindow {
                                     MButton { objectName:"loadMoreButton"; anchors.centerIn: parent; text: app.busy ? "Loading…" : "Load more"; busy: app.busy; enabled: !app.busy; tonal: true; visible: app.canMore && tracks.count>0; onClicked: app.more() }
                                 }
                                 Column {
-                                    objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
-                                    visible: app.collection.count===0 && !app.busy && !window.serverDisconnected
+                                    objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); height: 140; spacing: 14
+                                    visible: app.collection.count===0 && !app.busy && !window.serverDisconnected && !(app.page==="library" && window.libraryTab.startsWith("favorites"))
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: app.error?"refresh":app.collection.query || app.page==="search"?"search":"library"; size: 36; ink: Theme.muted }
-                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
+                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab.startsWith("favorites")?window.likedEmptyTitle():window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"Nothing here yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
                                     MButton {
                                         objectName: "emptyStateAction"; anchors.horizontalCenter: parent.horizontalCenter; tonal: true
-                                        text: app.collection.query?"Clear filters":app.error && app.canRetry?"Retry":window.libraryTab==="files" && app.page==="library"?"Add music":"Search music"
+                                        text: app.collection.query?"Clear filters":app.error && app.canRetry?"Retry":window.libraryTab==="files" && app.page==="library"?"Add music":window.libraryTab.startsWith("favorites")?window.likedSearchLabel():"Search music"
                                         onClicked: {if(app.collection.query)app.collection.query="";else if(app.error && app.canRetry)app.retry();else if(window.libraryTab==="files" && app.page==="library")window.openFileDialog("audio");else window.focusSearch();}
                                     }
                                 }
+                            }
+                            Item {
+                                id: likedEmptyOverlay
+                                objectName: "likedEmptyOverlay"
+                                anchors.centerIn: parent
+                                width: Math.min(parent.width, 320); height: 140
+                                visible: app.page==="library" && window.libraryTab.startsWith("favorites") && app.collection.count===0 && !app.busy && !window.serverDisconnected
+                                z: 10
+                                Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 0; name: app.collection.query ? "search" : "library"; size: 36; ink: Theme.muted }
+                                SungText { x: 0; y: 50; width: parent.width; height: 24; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: app.collection.query ? "No matching songs" : window.likedEmptyTitle(); color: Theme.muted; font.pixelSize: Theme.bodyLarge }
+                                MButton { anchors.horizontalCenter: parent.horizontalCenter; y: 88; tonal: true; visible: !app.collection.query; text: window.likedSearchLabel(); onClicked: window.focusSearch() }
                             }
                             GridView {
                                 id:playlistGrid;objectName:"playlistGrid";anchors.fill:parent;clip:true;reuseItems:true;cacheBuffer:0
@@ -1211,7 +1332,7 @@ ApplicationWindow {
                                 delegate:ArtCard {required property var modelData;width:playlistGrid.cellWidth-16
                                     track:Object.assign({},modelData,{kind:"local",art:modelData.customCover||"",artworks:modelData.customCover?[]:modelData.artworks})
                                     openHandler:window.openCollection
-                                    MButton {anchors.left:parent.left;anchors.top:parent.top;anchors.margins:8;symbol:"more";tonal:true;tip:"Playlist actions";onClicked:{window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);}}
+                                    MButton {anchors.left:parent.left;anchors.bottom:parent.bottom;anchors.margins:8;symbol:"more";tonal:true;tip:"Playlist actions";onClicked:{window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);}}
                                 }
                                 SungText {anchors.centerIn:parent;visible:playlistGrid.count===0;text:"Create your first playlist";color:Theme.muted}
                             }
@@ -1225,6 +1346,7 @@ ApplicationWindow {
                                         anchors.fill: parent; anchors.margins: 12; spacing: 12
                                         AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: Theme.shapeMedium; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
                                         AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: Theme.bodyLarge; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: Theme.bodySmall } } }
+                                        MButton { symbol: "heart"; toggle: true; selected: (app.likedCollections, app.isLikedItem(Object.assign({},modelData,{kind:"local"}))); tip: selected?"Remove from liked":"Like"; onClicked: app.toggleLike(Object.assign({},modelData,{kind:"local"})) }
                                         MButton { symbol: "more"; tip: "Playlist actions"; onClicked: {window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);} }
                                     }
                                 }
@@ -1575,6 +1697,40 @@ ApplicationWindow {
                     artUrl: modelData.art || ""; text: modelData.title || ""
                     selected: app.libraryId===modelData.id
                     onClicked: { navigationDrawer.close(); app.open(modelData) }
+                    onContextRequested: window.showNavigationContext(modelData, anchor)
+                }
+            }
+            ColumnLayout {
+                id: likedDrawerSection
+                objectName: "likedDrawerSection"
+                visible: app.likedSidebarCollections.length>0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(260, likedDrawerList.contentHeight+40)
+                Layout.maximumHeight: Math.max(112, navigationDrawer.height-300)
+                spacing: 2
+                MDivider { objectName: "likedDrawerDivider"; Layout.fillWidth: true; Layout.topMargin: 4; Layout.bottomMargin: 2 }
+                SungText { objectName: "likedDrawerLabel"; text: "Liked"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: 16 }
+                ListView {
+                    id: likedDrawerList
+                    objectName: "likedDrawerList"
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    clip: true; spacing: 0; boundsBehavior: Flickable.StopAtBounds
+                    model: app.likedSidebarCollections.slice(0, 6)
+                    ScrollBar.vertical: MScrollBar {}
+                    delegate: MNavigationItem {
+                        required property var modelData
+                        required property int index
+                        objectName: "drawerLiked_"+index
+                        expanded: true
+                        width: likedDrawerList.width
+                        height: 48
+                        symbol: modelData.kind==="artist" || modelData.kind==="local-artist" ? "person" : modelData.kind==="album" || modelData.kind==="local-album" ? "album" : modelData.kind==="playlist" || modelData.kind==="local" ? "queue" : "heart"
+                        artUrl: modelData.art || ""
+                        text: modelData.title || "Liked item"
+                        selected: app.isLikedItem(modelData) && app.collectionItem.id===modelData.id
+                        onClicked: { navigationDrawer.close(); app.open(modelData) }
+                        onContextRequested: window.showNavigationContext(modelData, anchor)
+                    }
                 }
             }
             Item { Layout.fillHeight: true }
@@ -1624,6 +1780,13 @@ ApplicationWindow {
         MMenuItem { text: "Move up in playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; enabled: window.menuIndex>0 && app.collection.sortKey==="original" && !app.collection.query; onTriggered: app.movePlaylistTrack(window.localPlaylist,window.menuIndex,window.menuIndex-1) }
         MMenuItem { text: "Move down in playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; enabled: window.menuIndex<app.results.count-1 && app.collection.sortKey==="original" && !app.collection.query; onTriggered: app.movePlaylistTrack(window.localPlaylist,window.menuIndex,window.menuIndex+1) }
         MMenuItem { text: "Remove from playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; onTriggered: app.removeFromPlaylist(window.localPlaylist,window.menuIndex) }
+    }
+    MMenu {
+        id: navigationItemActions
+        objectName: "navigationItemActions"
+        MMenuItem { symbol: "play"; text: "Play"; onTriggered: window.playNavigationItem(window.navigationContextItem) }
+        MMenuItem { symbol: "heart"; text: app.isLikedItem(window.navigationContextItem)?"Unlike":"Like"; onTriggered: app.toggleLike(window.navigationContextItem) }
+        MMenuItem { symbol: "pin"; text: {app.pins;return app.isPinned(window.navigationContextItem)?"Unpin from Home":"Pin to Home";} onTriggered: app.togglePin(window.navigationContextItem) }
     }
     MMenu {
         id: playlistActions

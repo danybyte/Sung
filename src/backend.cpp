@@ -205,7 +205,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   connect(this,&Backend::seeked,this,schedule);
   connect(&m_queue,&Entries::countChanged,this,schedule);
   connect(this,&Backend::libraryChanged,this,&Backend::updateLocalView);
-  connect(this,&Backend::libraryChanged,this,[this]{if(m_page=="local" && !smartPlaylist(m_libraryId).isEmpty()){for(const auto &p:m_playlists)if(p.toMap().value("id")==m_libraryId){const auto rows=playlistRows(p.toMap());if(rows!=m_results.rows)m_results.assign(rows);}}if(m_page=="library"&&(m_libraryId.startsWith("mix-")||m_libraryId=="files")){const auto rows=libraryRows(m_libraryId);if(rows!=m_results.rows)m_results.assign(rows);}});
+  connect(this,&Backend::libraryChanged,this,[this]{if(m_page=="local" && !smartPlaylist(m_libraryId).isEmpty()){for(const auto &p:m_playlists)if(p.toMap().value("id")==m_libraryId){const auto rows=playlistRows(p.toMap());if(rows!=m_results.rows)m_results.assign(rows);}}if(m_page=="library"&&(m_libraryId.startsWith("mix-")||m_libraryId=="files"||m_libraryId.startsWith("favorites"))){const auto rows=libraryRows(m_libraryId);if(rows!=m_results.rows)m_results.assign(rows);}});
   connect(this,&Backend::catalogChanged,this,&Backend::presentationChanged);
   load();
   setupServer();
@@ -504,6 +504,7 @@ void Backend::open(const QVariantMap &item) {
     serverBrowseRequest({{"mode",item.value("kind")},{"remoteId",item.value("remoteId")},{"genre",item.value("title")},{"title",item.value("title")},{"art",item.value("art")},{"editable",item.value("editable")}});return;
   }
   auto kind = item.value("kind").toString();
+  if(kind=="playlist" && item.value("browseId").toString().startsWith("http")){openLink(item.value("browseId").toString());return;}
   if(kind=="smart"){library(item.value("id").toString());return;}
   if(kind=="local"){openPlaylist(item.value("id").toString());return;}
   if (kind == "song" || kind == "video") {
@@ -1319,6 +1320,7 @@ void Backend::load() {
   m_localTracks=playable(d.value("localTracks").toList());
   m_musicFolders=d.value("musicFolders").toStringList().mid(0,64);
   m_favorites = d.value("favorites").toList();
+  m_likedCollections = d.value("likedCollections").toList();
   m_history = d.value("history").toList();
   refreshRecentlyPlayed();
   m_lastPlayed=d.value("lastPlayed").toMap();
@@ -1343,7 +1345,7 @@ void Backend::save() {
     return;
   }
   f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-  f.write(QJsonDocument::fromVariant(QVariantMap{{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites", m_favorites},
+  f.write(QJsonDocument::fromVariant(QVariantMap{{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites", m_favorites},{"likedCollections",m_likedCollections},
                                                  {"history", m_history},{"lastPlayed",m_lastPlayed},{"plays",m_plays},{"playlistVersions",m_playlistVersions},
                                                  {"sessions",m_sessions},{"playlists", m_playlists},{"pins",m_pins},{"lyricOffsets",m_lyricOffsets},
                                                  {"queue", m_queue.rows},
@@ -1412,9 +1414,58 @@ bool Backend::isLiked(const QString &id) const {
 bool Backend::liked() const {
   return isLiked(current().value("id").toString());
 }
+static bool isLikedCollectionKind(const QString &kind) {
+  return QStringList{"album","artist","playlist","local","local-album","local-artist"}.contains(kind);
+}
+static QString likedItemKey(const QVariantMap &item) {
+  const auto kind=item.value("kind").toString();
+  const auto id=item.value("browseId",item.value("remoteId",item.value("id"))).toString();
+  return kind+":"+item.value("source").toString()+":"+item.value("server").toString()+":"+id;
+}
+bool Backend::isLikedItem(const QVariantMap &item) const {
+  const auto kind=item.value("kind").toString();
+  if(!isLikedCollectionKind(kind))return isLiked(item.value("id").toString());
+  const auto key=likedItemKey(item);if(key.endsWith(":"))return false;
+  for(const auto &v:m_likedCollections)if(likedItemKey(v.toMap())==key)return true;
+  return false;
+}
+QVariantList Backend::likedCollections() const {
+  QVariantList result;
+  const auto localPlaylists=playlists();
+  for(const auto &raw:m_likedCollections){
+    auto item=raw.toMap();const auto kind=item.value("kind").toString();
+    if(kind=="local"){
+      bool found=false;
+      for(const auto &v:localPlaylists)if(v.toMap().value("id")==item.value("id")){const auto p=v.toMap();for(const auto &key:QStringList{"title","art","artworks","count","smart"})if(p.contains(key))item[key]=p.value(key);if(item.value("art").toString().isEmpty())item["art"]=item.value("artworks").toStringList().value(0);found=true;break;}
+      if(!found)continue;
+    } else if(kind=="local-album" || kind=="local-artist"){
+      const auto groups=localGroups(kind=="local-album"?"local-albums":"local-artists");bool found=false;
+      for(const auto &v:groups){const auto group=v.toMap();if(group.value("id")==item.value("id") || group.value("groupKey")==item.value("groupKey")){item=group;found=true;break;}}
+      if(!found)continue;
+    }
+    result.append(item);
+  }
+  return result;
+}
+QVariantList Backend::likedItems() const {
+  QVariantList result=m_favorites;
+  result.append(likedCollections());
+  return result;
+}
+QVariantList Backend::likedSidebarCollections() const {
+  QVariantList result;
+  for(const auto &item:likedCollections())if(!isPinned(item.toMap()))result.append(item);
+  return result;
+}
 void Backend::toggleLike(const QVariantMap &item) {
-  if(isServerSource(item.value("source"))){
+  const auto kind=item.value("kind").toString();
+  if(isServerSource(item.value("source"))&&!isLikedCollectionKind(kind)){
     m_server.star(item,!m_server.isStarred(item.value("id").toString()),[this](const QVariantMap &,const QString &error){if(!error.isEmpty())notifyError(error);else if(m_page=="server"&&m_request.value("mode")=="favorites")refresh();});return;
+  }
+  if(isLikedCollectionKind(kind)){
+    const auto key=likedItemKey(item);if(key.endsWith(":"))return;
+    for(int i=0;i<m_likedCollections.size();++i)if(likedItemKey(m_likedCollections[i].toMap())==key){m_likedCollections.removeAt(i);emit libraryChanged();m_saveTimer.start();emit toast("Removed from liked");if(m_page=="library"&&m_libraryId.startsWith("favorites"))m_results.assign(libraryRows(m_libraryId));return;}
+    auto saved=item;saved["id"]=item.value("id",item.value("browseId",item.value("remoteId")));m_likedCollections.prepend(saved);emit libraryChanged();m_saveTimer.start();emit toast("Added to liked");if(m_page=="library"&&m_libraryId.startsWith("favorites"))m_results.assign(libraryRows(m_libraryId));return;
   }
   if (playable({item}).isEmpty())
     return;
@@ -1428,8 +1479,8 @@ void Backend::toggleLike(const QVariantMap &item) {
   if (!removed)
     m_favorites.prepend(item);
   emit libraryChanged();
-  if (m_page == "library" && m_libraryId == "favorites")
-    m_results.assign(m_favorites);
+  if (m_page == "library" && m_libraryId.startsWith("favorites"))
+    m_results.assign(libraryRows(m_libraryId));
   m_saveTimer.start();
   emit toast(removed ? "Removed from liked songs" : "Added to liked songs");
 }
@@ -1458,7 +1509,8 @@ void Backend::library(const QString &kind) {
            kind == "files" ? "Local files" : kind == "mixes" ? "Mixes" : kind=="mix-recent" ? "Recently liked" : kind=="mix-rediscover" ? "Rediscover" : kind=="mix-unplayed" ? "Unplayed" :
            kind == "history"     ? "Recently played"
            : kind == "playlists" ? "Playlists"
-                                 : "Liked songs",
+           : kind.startsWith("favorites") ? "Liked"
+                                           : "Liked",
            m_page != "library", "library:"+kind);
   m_libraryId = kind;
   m_results.assign(libraryRows(kind));
@@ -1619,7 +1671,7 @@ void Backend::exportLibrary(const QUrl &url) {
   if(!url.isLocalFile())return;
   QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)){notifyError("Couldn’t export the library.");return;}
   file.setPermissions(QFile::ReadOwner|QFile::WriteOwner);
-  file.write(QJsonDocument::fromVariant(QVariantMap{{"sung",1},{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites",m_favorites},{"playlists",m_playlists},{"pins",pins()},{"lyricOffsets",m_lyricOffsets}}).toJson());
+  file.write(QJsonDocument::fromVariant(QVariantMap{{"sung",1},{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites",m_favorites},{"likedCollections",m_likedCollections},{"playlists",m_playlists},{"pins",pins()},{"lyricOffsets",m_lyricOffsets}}).toJson());
   if(!file.commit())notifyError("Couldn’t export the library.");else emit toast("Library exported");
 }
 void Backend::importLibrary(const QUrl &url) {
@@ -1631,6 +1683,7 @@ void Backend::importLibrary(const QUrl &url) {
   for(const auto &path:map.value("musicFolders").toStringList())if(QDir::isAbsolutePath(path)&&!m_musicFolders.contains(path)&&m_musicFolders.size()<64)m_musicFolders.append(path);
   invalidateUndo("playlists");
   for(const auto &v:playable(map.value("favorites").toList()))if(!isLiked(itemId(v)))m_favorites.append(v);
+  for(const auto &v:map.value("likedCollections").toList())if(isLikedItem(v.toMap())==false)m_likedCollections.prepend(v);
   for(const auto &v:map.value("playlists").toList()){
     auto p=v.toMap();const auto importedRules=p.value("rules").toMap();const bool importedSmart=p.contains("rules");auto rows=playable(p.value("tracks").toList());auto name=p.value("title").toString().trimmed();if(name.isEmpty())continue;
     int found=-1;for(int i=0;i<m_playlists.size();++i)if(m_playlists[i].toMap().value("id")==p.value("id")){found=i;break;}
@@ -1763,7 +1816,7 @@ bool Backend::isPinned(const QVariantMap &item) const {
 }
 void Backend::togglePin(const QVariantMap &item) {
   const auto kind=item.value("kind").toString(),id=item.value("browseId",item.value("id")).toString();
-  if(!QStringList{"album","playlist","artist","local"}.contains(kind)||id.isEmpty()||item.value("title").toString().trimmed().isEmpty())return;
+  if(!QStringList{"album","playlist","artist","local","local-album","local-artist"}.contains(kind)||id.isEmpty()||item.value("title").toString().trimmed().isEmpty())return;
   for(int i=0;i<m_pins.size();++i)if(pinKey(m_pins[i].toMap())==pinKey(item)){
     m_pins.removeAt(i);emit libraryChanged();m_saveTimer.start();emit toast("Unpinned from Home");return;
   }
@@ -1774,7 +1827,9 @@ void Backend::togglePin(const QVariantMap &item) {
 }
 QVariantMap Backend::collectionItem() const {
   if(m_page=="server" && QStringList{"album","artist","playlist"}.contains(m_request.value("mode").toString()))return m_server.item({{"id",m_request.value("remoteId")},{"name",m_title}},m_request.value("mode").toString());
+  if(m_page=="link" && !m_request.value("url").toString().isEmpty())return {{"id",m_request.value("url")},{"browseId",m_request.value("url")},{"kind","playlist"},{"title",m_title},{"art",m_cover}};
   if(m_page=="local")return {{"id",m_libraryId},{"kind","local"},{"title",m_title},{"art",m_cover}};
+  if(m_page=="local-album" || m_page=="local-artist")return {{"id",m_request.value("id")},{"kind",m_page},{"groupKey",m_request.value("groupKey")},{"title",m_title},{"art",m_cover},{"artist",m_request.value("artist")}};
   if(!QStringList{"album","artist","playlist"}.contains(m_page)||m_request.value("id").toString().isEmpty())return {};
   return {{"id",m_request.value("id")},{"browseId",m_request.value("id")},{"kind",m_page},{"title",m_title},{"art",m_cover}};
 }
@@ -1966,7 +2021,23 @@ void Backend::movePlaylistRows(const QString &id,const QVariantList &indices,int
 QVariantList Backend::libraryRows(const QString &kind) const {
   if(kind=="local-albums" || kind=="local-artists")return localGroups(kind);
   if(kind=="files")return m_localTracks;
-  if(kind=="favorites")return m_favorites;
+  if(kind=="favorites" || kind=="favorites-all"){
+    QVariantList rows=m_favorites;rows.append(likedCollections());return rows;
+  }
+  if(kind=="favorites-songs")return m_favorites;
+  if(kind=="favorites-playlists"){
+    QVariantList rows;
+    for(const auto &v:likedCollections()){
+      const auto collectionKind=v.toMap().value("kind").toString();
+      if(collectionKind=="playlist" || collectionKind=="local")rows.append(v);
+    }
+    return rows;
+  }
+  if(kind=="favorites-artists" || kind=="favorites-albums"){
+    const auto wanted=kind.endsWith("artists")?QString("artist"):QString("album");QVariantList rows;
+    for(const auto &v:likedCollections())if(v.toMap().value("kind").toString().contains(wanted))rows.append(v);
+    return rows;
+  }
   if(kind=="history")return m_history;
   if(kind=="mixes")return {QVariantMap{{"id","mix-recent"},{"kind","smart"},{"title","Recently liked"}},QVariantMap{{"id","mix-rediscover"},{"kind","smart"},{"title","Rediscover"}},QVariantMap{{"id","mix-unplayed"},{"kind","smart"},{"title","Unplayed"}}};
   if(kind=="mix-recent")return m_favorites.mid(0,50);

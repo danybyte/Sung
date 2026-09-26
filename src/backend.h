@@ -205,6 +205,9 @@ class Backend : public QObject {
   Q_PROPERTY(int lyricSpan READ lyricSpan NOTIFY lyricIndexChanged)
   Q_PROPERTY(bool lyricsBusy READ lyricsBusy NOTIFY lyricsChanged)
   Q_PROPERTY(QVariantList playlists READ playlists NOTIFY libraryChanged)
+  Q_PROPERTY(QVariantList likedCollections READ likedCollections NOTIFY libraryChanged)
+  Q_PROPERTY(QVariantList likedSidebarCollections READ likedSidebarCollections NOTIFY libraryChanged)
+  Q_PROPERTY(QVariantList likedItems READ likedItems NOTIFY libraryChanged)
   Q_PROPERTY(QVariantList pins READ pins NOTIFY libraryChanged)
   Q_PROPERTY(QVariantMap collectionItem READ collectionItem NOTIFY catalogChanged)
   Q_PROPERTY(bool liked READ liked NOTIFY libraryChanged)
@@ -494,12 +497,16 @@ public:
   QPair<qint64,qint64> lyricSpanAt(int index) const;
   bool lyricsBusy() const { return m_lyricsBusy; }
   QVariantList playlists() const;
+  QVariantList likedCollections() const;
+  QVariantList likedSidebarCollections() const;
+  QVariantList likedItems() const;
   QVariantList pins() const;
   QVariantMap collectionItem() const;
   Q_INVOKABLE bool isPinned(const QVariantMap &item) const;
   Q_INVOKABLE void togglePin(const QVariantMap &item);
   bool liked() const;
   Q_INVOKABLE bool isLiked(const QString &id) const;
+  Q_INVOKABLE bool isLikedItem(const QVariantMap &item) const;
   QStringList recentSearches() const {return m_settings.value("recentSearches").toStringList().mid(0,12);}
   Q_INVOKABLE void rememberSearch(const QString &query);
   Q_INVOKABLE void removeRecentSearch(const QString &query);
@@ -698,7 +705,7 @@ private:
   QVariantList m_lyricLines;
   // Keyed by the source colour and by everything else that decides the scheme.
   mutable QHash<QPair<QRgb,QString>,QVariantMap> m_schemes;
-  QVariantList m_sections, m_favorites, m_history, m_playlists, m_back, m_pins;
+  QVariantList m_sections, m_favorites, m_likedCollections, m_history, m_playlists, m_back, m_pins;
   Entries m_recent;
   void refreshRecentlyPlayed();
   // One row per play, oldest first. A private session records nothing.

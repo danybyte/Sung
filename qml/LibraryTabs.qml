@@ -14,7 +14,7 @@ Flickable {
     // may also carry `badge` for a count.
     property string dotKey: ""
     property var entries: [
-        {label:"Liked songs", key:"favorites", name:"likedTab"},
+        {label:"Liked", key:"favorites", name:"likedTab"},
         {label:"Playlists", key:"playlists", name:"playlistsTab"},
         {label:"Local files", key:"files", name:"localFilesTab"},
         {label:"Mixes", key:"mixes", name:"mixesTab"},
@@ -71,7 +71,7 @@ Flickable {
                 required property var modelData
                 required property int index
                 readonly property bool libraryNavigation: true
-                readonly property bool selected: tabs.currentKey === modelData.key || (!tabs.secondary && modelData.key === "files" && tabs.currentKey.startsWith("local-")) || (modelData.key === "mixes" && tabs.currentKey.startsWith("mix-"))
+                readonly property bool selected: tabs.currentKey === modelData.key || (!tabs.secondary && modelData.key === "favorites" && tabs.currentKey.startsWith("favorites-")) || (!tabs.secondary && modelData.key === "files" && tabs.currentKey.startsWith("local-")) || (modelData.key === "mixes" && tabs.currentKey.startsWith("mix-"))
                 objectName: modelData.name
                 text: modelData.label
                 implicitWidth: label.implicitWidth + 32 + (tabBadge.visible ? tabBadge.width+8 : 0)
