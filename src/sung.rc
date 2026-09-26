@@ -1,0 +1,2 @@
+#include <windows.h>
+SungIcon ICON "../assets/sung.ico"

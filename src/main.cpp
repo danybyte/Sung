@@ -94,9 +94,8 @@ static QString instanceSocketName() {
   return QStringLiteral("sung-instance");
 #endif
 }
-// Windows builds use the console subsystem so command-line flags and test
-// output reach the terminal. That also lets Qt Multimedia and FFmpeg stream
-// every media detail into the console, so silence them unless --verbose is set.
+// Keep Qt Multimedia and FFmpeg diagnostics quiet in normal Windows launches;
+// the release target is a GUI subsystem executable and has no console window.
 static void configureMediaLogging(bool verbose) {
 #ifdef Q_OS_WIN
   if (verbose) return;
